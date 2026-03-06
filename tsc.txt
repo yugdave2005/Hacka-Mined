@@ -1,0 +1,2 @@
+.next/dev/types/validator.ts(116,39): error TS2307: Cannot find module '../../../src/app/dashboard/zombie-spend/page.js' or its corresponding type declarations.
+src/app/dashboard/runway-simulator/page.tsx(81,10): error TS2322: Type 'boolean' is not assignable to type 'string'.
