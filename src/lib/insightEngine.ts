@@ -73,7 +73,7 @@ Provide actionable financial insights for the founder.`;
 }
 
 export async function generateInsights(input: InsightInput): Promise<InsightOutput> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
     // Return mock insights when API key is not configured
@@ -81,14 +81,14 @@ export async function generateInsights(input: InsightInput): Promise<InsightOutp
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'llama3-8b-8192',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: buildUserPrompt(input) },
@@ -100,7 +100,7 @@ export async function generateInsights(input: InsightInput): Promise<InsightOutp
     });
 
     if (!response.ok) {
-      console.error('OpenAI API error:', response.status, await response.text());
+      console.error('Groq API error:', response.status, await response.text());
       return generateMockInsights(input);
     }
 

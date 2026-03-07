@@ -48,7 +48,6 @@ export default function LandingPage() {
             <span className="text-[15px] font-bold tracking-tight text-emerald-950">BurnSight</span>
           </Link>
           <div className="flex items-center gap-1 sm:gap-2">
-            <Link href="/pricing" className="hidden px-3 py-1.5 text-[13px] font-medium text-emerald-700/60 transition-colors hover:text-emerald-900 sm:block">Pricing</Link>
             <Link href="/dashboard" className="hidden px-3 py-1.5 text-[13px] font-medium text-emerald-700/60 transition-colors hover:text-emerald-900 sm:block">Demo</Link>
             <Link href="/auth">
               <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -19,6 +20,15 @@ const navItems = [
 ];
 
 function SidebarContent({ pathname, onClose }: { pathname: string; onClose?: () => void }) {
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setUserEmail(data.user.email ?? null);
+    });
+  }, []);
+
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' || pathname === '/dashboard/overview' : pathname === href;
 
@@ -69,13 +79,18 @@ function SidebarContent({ pathname, onClose }: { pathname: string; onClose?: () 
           <Upload className="h-4 w-4" strokeWidth={2} /> Upload Data
         </Link>
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-800/30 bg-emerald-900/20 px-3 py-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-[11px] font-bold text-amber-900 shadow-sm">
-            $
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-500 text-[11px] font-bold uppercase text-amber-900 shadow-sm">
+            {userEmail ? userEmail.charAt(0) : '$'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-medium text-emerald-200/80">BurnSight</p>
+            <p className="truncate text-[12px] font-medium text-emerald-200/80">{userEmail || 'BurnSight'}</p>
             <p className="text-[11px] text-emerald-500/50">Free Plan</p>
           </div>
+          {userEmail && (
+            <button onClick={() => createClient().auth.signOut().then(() => window.location.href = '/')} className="text-[10px] text-emerald-400/60 transition-colors hover:text-rose-400">
+              Logout
+            </button>
+          )}
         </div>
       </div>
     </>

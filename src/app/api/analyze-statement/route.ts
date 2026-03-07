@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No transactions provided' }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
       // Deterministic fallback when no API key
@@ -227,26 +227,25 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'llama3-8b-8192',
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: buildPrompt(transactions, cashBalance) },
           ],
-          temperature: 0.2,
-          max_tokens: 3000,
+          temperature: 0.1,
           response_format: { type: 'json_object' },
         }),
       });
 
       if (!response.ok) {
-        console.error('OpenAI API error:', response.status);
+        console.error('Groq API error:', response.status);
         const analysis = generateFallbackAnalysis(transactions, cashBalance);
         return NextResponse.json({ success: true, analysis, source: 'deterministic-fallback' });
       }

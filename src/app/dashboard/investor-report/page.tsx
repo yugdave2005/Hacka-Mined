@@ -59,48 +59,180 @@ export default function InvestorReportPage() {
     else setData(analysis);
   }, [router]);
 
-  /* ─── PDF Export ─── */
+  /* ─── NATIVE PDF Export (Matching Corporate Format) ─── */
   const exportPDF = useCallback(async () => {
-    if (!reportRef.current) return;
+    if (!data) return;
     setExporting(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
+      const [{ jsPDF }, autoTableModule] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+      ]);
+      const autoTable = autoTableModule.default;
 
-      const element = reportRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // Top Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(33, 37, 41);
+      doc.text('Investment Performance Report', 14, 20);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(100, 100, 100);
+      doc.text(new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), 14, 26);
+      
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Best Dynamic PDF Generation', pageWidth - 14, 20, { align: 'right' });
+      
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, 30, pageWidth - 14, 30);
+
+      const leftColWidth = 125;
+      const rightColX = 148;
+      
+      // --- Right Column: Summary Panel ---
+      doc.setFillColor(248, 250, 248);
+      doc.rect(rightColX - 5, 30, pageWidth - rightColX + 5, pageHeight - 30, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(33, 37, 41);
+      doc.text('Summary', rightColX, 42);
+      
+      let summaryY = 52;
+      const summaryMetrics = [
+        { label: 'Company', value: 'Generated via BurnSight' },
+        { label: 'Sponsor', value: 'BurnSight Auto-Analytics' },
+        { label: 'Cash in Bank', value: fmt(data.cashBalance) },
+        { label: 'Monthly Burn', value: fmt(data.monthlyBurnRate) },
+        { label: 'Monthly Revenue', value: fmt(data.monthlyRevenue) },
+        { label: 'Runway', value: data.currentRunwayMonths >= 999 ? 'Infinite' : `${data.currentRunwayMonths.toFixed(1)} months` },
+        { label: 'Gross Margin', value: `${data.founderMetrics?.grossMargin ?? 0}%` },
+        { label: 'Default Alive', value: data.founderMetrics?.isDefaultAlive ? 'Yes' : 'No' },
+        { label: 'OpEx Ratio', value: `${data.founderMetrics?.opExRatio ?? 0}%` },
+      ];
+
+      summaryMetrics.forEach(item => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(120, 120, 120);
+        doc.text(item.label, rightColX, summaryY);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(33, 37, 41);
+        doc.text(String(item.value), rightColX, summaryY + 5);
+        summaryY += 12;
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = 210; // A4 mm
-      const pageHeight = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      // --- Left Column ---
+      
+      // Description
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(33, 37, 41);
+      doc.text('Description', 14, 42);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 80, 80);
+      const desc = `The company currently holds ${fmt(data.cashBalance)} in cash with a monthly net burn rate of ${fmt(data.monthlyBurnRate)}, providing an estimated runway of ${data.currentRunwayMonths >= 999 ? 'infinite' : data.currentRunwayMonths.toFixed(1) + ' months'}. Monthly recurring revenue stands at ${fmt(data.monthlyRevenue)} with a ${data.revenueGrowthRate > 0 ? '+' : ''}${data.revenueGrowthRate}% month-over-month growth rate.\n\nRisk assessment: ${data.riskLevel} (score: ${data.riskScore}/100). The company is currently ${data.founderMetrics?.isDefaultAlive ? 'Default Alive' : 'Default Dead'} — ${data.founderMetrics?.defaultAliveVerdict || 'based on current trajectory.'} Gross margin is ${data.founderMetrics?.grossMargin ?? 0}%.`;
+      const splitDesc = doc.splitTextToSize(desc, leftColWidth);
+      doc.text(splitDesc, 14, 48);
+      
+      let cursorY = 48 + (splitDesc.length * 4) + 12;
+      
+      // Breakdown data avg logic
+      const breakdown = data.monthlyBreakdown || [];
+      const last3 = breakdown.slice(-3);
+      const last6 = breakdown.slice(-6);
+      const avgOf = (arr: any[], key: string) => arr.length ? Math.round(arr.reduce((s, r) => s + r[key], 0) / arr.length) : 0;
+      const pRows = [
+        { period: 'Last 3 Months', revenue: avgOf(last3, 'revenue'), expenses: avgOf(last3, 'expenses'), netBurn: avgOf(last3, 'netBurn') },
+        { period: 'Last 6 Months', revenue: avgOf(last6, 'revenue'), expenses: avgOf(last6, 'expenses'), netBurn: avgOf(last6, 'netBurn') },
+        { period: 'All Time Avg', revenue: avgOf(breakdown, 'revenue'), expenses: avgOf(breakdown, 'expenses'), netBurn: avgOf(breakdown, 'netBurn') },
+      ];
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      let heightLeft = imgHeight;
-      let position = 0;
+      // Performance Table
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(33, 37, 41);
+      doc.text('Performance Table', 14, cursorY);
+      
+      autoTable(doc, {
+        startY: cursorY + 4,
+        margin: { left: 14, right: pageWidth - leftColWidth - 14 },
+        tableWidth: leftColWidth,
+        head: [['Period', 'Revenue', 'Expenses', 'Net Burn']],
+        body: pRows.map(r => [r.period, fmt(r.revenue), fmt(r.expenses), fmt(r.netBurn)]),
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 8 },
+      });
+      // @ts-ignore
+      cursorY = doc.lastAutoTable.finalY + 12;
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // Risk Table
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(33, 37, 41);
+      doc.text('Risk Table', 14, cursorY);
+      
+      autoTable(doc, {
+        startY: cursorY + 4,
+        margin: { left: 14, right: pageWidth - leftColWidth - 14 },
+        tableWidth: leftColWidth,
+        head: [['Metric', 'Value']],
+        body: [
+          ['Overall Risk', `${data.riskScore}/100`],
+          ['Bankruptcy Prob (90d)', `${(data.founderMetrics?.opExRatio ?? 0) > 100 ? 'High' : 'Low'}`],
+          ['Burn Trend', data.monthlyBurnRate > data.monthlyRevenue ? 'Negative' : 'Positive'],
+          ['Revenue Coverage', `${data.monthlyRevenue > 0 ? Math.round((data.monthlyRevenue / (data.monthlyBurnRate + data.monthlyRevenue)) * 100) : 0}%`],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 8 },
+      });
+      // @ts-ignore
+      cursorY = doc.lastAutoTable.finalY + 12;
+      
+      // Top Holding (Top Expenses)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(33, 37, 41);
+      doc.text('Top Holdings (Expenses)', 14, cursorY);
+      
+      autoTable(doc, {
+        startY: cursorY + 4,
+        margin: { left: 14, right: pageWidth - leftColWidth - 14 },
+        tableWidth: leftColWidth,
+        head: [['Name', 'Type', 'Weight']],
+        body: (data.topExpenseCategories || []).map(e => [
+          e.category, fmt(e.amount) + '/mo', `${e.percentOfTotal}%`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [16, 185, 129] },
+        styles: { fontSize: 8 },
+      });
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Legal notice goes here and other fun things / BurnSight PDF', 14, pageHeight - 10);
 
-      pdf.save(`BurnSight_Investor_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+      doc.save(`Investment_Performance_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
     } finally {
       setExporting(false);
     }
-  }, []);
+  }, [data]);
 
   if (!data) return <ReportSkeleton />;
 
@@ -140,10 +272,10 @@ export default function InvestorReportPage() {
 
   return (
     <motion.div variants={container} initial="hidden" animate="show"
-      className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 print:p-0 print:m-0 print:max-w-none">
 
       {/* ── Action Bar ── */}
-      <motion.div variants={fadeUp} className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <motion.div variants={fadeUp} className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div>
           <div className="flex items-center gap-2">
             <motion.div animate={{ y: [0, -3, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
@@ -162,18 +294,18 @@ export default function InvestorReportPage() {
           <motion.button whileHover={{ scale: 1.03, boxShadow: '0 8px 25px rgba(16,185,129,0.25)' }} whileTap={{ scale: 0.97 }}
             onClick={exportPDF}
             disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-2 text-[12px] font-bold text-white shadow-md shadow-emerald-500/25 sm:text-[13px] disabled:opacity-60">
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-2 text-[12px] font-bold text-white shadow-md shadow-emerald-500/25 sm:text-[13px] disabled:opacity-60 print:hidden">
             <Download className={cn("h-3.5 w-3.5", exporting && "animate-bounce")} />
-            {exporting ? 'Generating...' : 'Export PDF'}
+            {exporting ? 'Generating...' : 'Save as PDF'}
           </motion.button>
         </div>
       </motion.div>
 
       {/* ━━━ REPORT BODY (captured for PDF) ━━━ */}
-      <div ref={reportRef} className="bg-white">
+      <div ref={reportRef} className="bg-white print:w-[210mm] print:h-[297mm] print:overflow-hidden print:[&_*]:!leading-tight print:text-[8px] print:mx-auto">
 
         {/* ── Green Header Banner ── */}
-        <div className="rounded-t-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 px-6 py-5 sm:px-8 sm:py-6">
+        <div className="rounded-t-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 px-6 py-5 sm:px-8 sm:py-6 print:py-3 print:px-5 print:rounded-none" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-white sm:text-2xl">Investor Performance Report</h2>
@@ -195,15 +327,15 @@ export default function InvestorReportPage() {
         <div className="flex flex-col border border-t-0 border-emerald-200/60 lg:flex-row">
 
           {/* LEFT SIDEBAR - Summary */}
-          <div className="w-full border-b border-emerald-100 bg-emerald-50/30 lg:w-72 lg:border-b-0 lg:border-r xl:w-80">
-            <div className="border-b border-emerald-100 px-5 py-3">
-              <h3 className="text-[13px] font-bold text-emerald-900">Summary</h3>
+          <div className="w-full border-b border-emerald-100 bg-emerald-50/30 lg:w-72 lg:border-b-0 lg:border-r xl:w-80 print:w-1/3 print:border-b-0 print:border-r">
+            <div className="border-b border-emerald-100 px-5 py-3 print:py-1.5 print:px-3">
+              <h3 className="text-[13px] font-bold text-emerald-900 print:text-[11px]">Summary</h3>
             </div>
             <div className="divide-y divide-emerald-100">
               {summaryItems.map((item) => (
-                <div key={item.label} className="flex items-start justify-between gap-2 px-5 py-2.5">
-                  <span className="text-[11px] font-bold text-emerald-700/60">{item.label}</span>
-                  <span className={cn('text-right text-[11px] font-semibold',
+                <div key={item.label} className="flex items-start justify-between gap-2 px-5 py-2.5 print:py-1 print:px-3">
+                  <span className="text-[11px] font-bold text-emerald-700/60 print:text-[8px]">{item.label}</span>
+                  <span className={cn('text-right text-[11px] font-semibold print:text-[8px]',
                     item.label === 'Risk Level'
                       ? item.value === 'SAFE' ? 'text-emerald-600' : item.value === 'WARNING' ? 'text-amber-600' : 'text-rose-600'
                       : item.label === 'Default Alive'
@@ -230,11 +362,11 @@ export default function InvestorReportPage() {
           <div className="flex-1 divide-y divide-emerald-100">
 
             {/* Executive Summary */}
-            <div className="px-5 py-5 sm:px-7">
-              <h3 className="mb-3 flex items-center gap-2 text-[14px] font-bold text-emerald-950">
-                <Activity className="h-4 w-4 text-emerald-500" /> Executive Summary
+            <div className="px-5 py-5 sm:px-7 print:py-2 print:px-4">
+              <h3 className="mb-3 flex items-center gap-2 text-[14px] font-bold text-emerald-950 print:mb-1 print:text-[11px]">
+                <Activity className="h-4 w-4 text-emerald-500 print:h-3 print:w-3" /> Executive Summary
               </h3>
-              <div className="space-y-2 text-[12px] leading-relaxed text-emerald-800/70">
+              <div className="space-y-2 text-[12px] leading-relaxed text-emerald-800/70 print:text-[8px] print:leading-snug print:space-y-1">
                 <p>
                   The company currently holds <strong className="text-emerald-900">{fmt(data.cashBalance)}</strong> in cash with
                   a monthly net burn rate of <strong className="text-emerald-900">{fmt(data.monthlyBurnRate)}</strong>,
@@ -274,11 +406,11 @@ export default function InvestorReportPage() {
             </div>
 
             {/* Revenue vs Expenses Chart */}
-            <div className="px-5 py-5 sm:px-7">
-              <h3 className="mb-4 flex items-center gap-2 text-[13px] font-bold text-emerald-950">
-                <BarChart3 className="h-4 w-4 text-emerald-500" /> Revenue vs Expenses Trend
+            <div className="px-5 py-5 sm:px-7 print:py-2 print:px-4">
+              <h3 className="mb-4 flex items-center gap-2 text-[13px] font-bold text-emerald-950 print:mb-1 print:text-[10px]">
+                <BarChart3 className="h-4 w-4 text-emerald-500 print:h-3 print:w-3" /> Revenue vs Expenses Trend
               </h3>
-              <div className="h-52 sm:h-60">
+              <div className="h-52 sm:h-60 print:h-32">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={breakdown} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#d1fae5" />
@@ -295,10 +427,10 @@ export default function InvestorReportPage() {
             </div>
 
             {/* Performance + Risk Tables (side by side) */}
-            <div className="grid grid-cols-1 gap-px bg-emerald-100 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-px bg-emerald-100 md:grid-cols-2 print:grid-cols-2 lg:bg-transparent">
               {/* Performance Table */}
-              <div className="bg-white px-5 py-4 sm:px-7">
-                <h3 className="mb-3 text-[13px] font-bold text-emerald-950">Performance Table</h3>
+              <div className="bg-white px-5 py-4 sm:px-7 print:py-2 print:px-4 print:border-r print:border-emerald-100">
+                <h3 className="mb-3 text-[13px] font-bold text-emerald-950 print:mb-1 print:text-[10px]">Performance Table</h3>
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-emerald-100">
@@ -319,8 +451,8 @@ export default function InvestorReportPage() {
                 </table>
               </div>
               {/* Risk Table */}
-              <div className="bg-white px-5 py-4 sm:px-7">
-                <h3 className="mb-3 text-[13px] font-bold text-emerald-950">Risk Assessment</h3>
+              <div className="bg-white px-5 py-4 sm:px-7 print:py-2 print:px-4">
+                <h3 className="mb-3 text-[13px] font-bold text-emerald-950 print:mb-1 print:text-[10px]">Risk Assessment</h3>
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-emerald-100">
@@ -347,7 +479,7 @@ export default function InvestorReportPage() {
             </div>
 
             {/* Monthly Cash Flow Bar Chart */}
-            <div className="px-5 py-5 sm:px-7">
+            <div className="px-5 py-5 sm:px-7 print:hidden">
               <h3 className="mb-4 flex items-center gap-2 text-[13px] font-bold text-emerald-950">
                 <PieChart className="h-4 w-4 text-teal-500" /> Monthly Cash Flow
               </h3>
@@ -370,9 +502,9 @@ export default function InvestorReportPage() {
             </div>
 
             {/* Top Expense Categories */}
-            <div className="px-5 py-5 sm:px-7">
-              <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-emerald-950">
-                <PieChart className="h-4 w-4 text-teal-500" /> Top Expense Categories
+            <div className="px-5 py-5 sm:px-7 print:py-2 print:px-4">
+              <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-emerald-950 print:mb-1 print:text-[10px]">
+                <PieChart className="h-4 w-4 text-teal-500 print:h-3 print:w-3" /> Top Expense Categories
               </h3>
               <table className="w-full">
                 <thead>
@@ -416,22 +548,22 @@ export default function InvestorReportPage() {
 
             {/* AI Board Highlights */}
             {data.aiInsights?.length > 0 && (
-              <div className="px-5 py-5 sm:px-7">
-                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-emerald-950">
-                  <BarChart3 className="h-4 w-4 text-emerald-500" /> AI Strategic Insights
+              <div className="px-5 py-5 sm:px-7 print:py-2 print:px-4">
+                <h3 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-emerald-950 print:mb-1 print:text-[10px]">
+                  <BarChart3 className="h-4 w-4 text-emerald-500 print:h-3 print:w-3" /> AI Strategic Insights
                 </h3>
-                <div className="space-y-3">
+                <div className="space-y-3 print:space-y-1">
                   {data.aiInsights.map((h, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400" />
+                    <div key={i} className="flex items-start gap-3 print:gap-1.5">
+                      <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400 print:mt-0.5 print:h-1.5 print:w-1.5" />
                       <div>
-                        <p className="text-[12px] font-bold text-emerald-900">{h.title}</p>
-                        <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-800/70">{h.explanation}</p>
-                        <div className="mt-1.5 flex flex-wrap gap-2">
-                          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-600">
+                        <p className="text-[12px] font-bold text-emerald-900 print:text-[9px]">{h.title}</p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-800/70 print:text-[7px] print:leading-tight">{h.explanation}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-2 print:mt-0.5 print:gap-1">
+                          <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-600 print:text-[6px] print:px-1 print:py-0" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                             REC: {h.recommendation}
                           </span>
-                          <span className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[9px] font-bold text-teal-600">
+                          <span className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[9px] font-bold text-teal-600 print:text-[6px] print:px-1 print:py-0" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                             IMPACT: {h.impactEstimate}
                           </span>
                         </div>
@@ -481,8 +613,8 @@ export default function InvestorReportPage() {
             )}
 
             {/* Footer */}
-            <div className="rounded-b-xl bg-emerald-50/50 px-5 py-3 sm:px-7">
-              <p className="text-[10px] text-emerald-600/40">
+            <div className="rounded-b-xl bg-emerald-50/50 px-5 py-3 sm:px-7 print:mt-auto print:py-1 print:px-4" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+              <p className="text-[10px] text-emerald-600/40 print:text-[6px]">
                 This report was auto-generated by BurnSight based on real transaction data. For investment decisions,
                 please conduct your own due diligence. Report generated on {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
               </p>

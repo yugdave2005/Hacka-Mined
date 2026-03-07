@@ -1,11 +1,32 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 export default function Navigation() {
   const pathname = usePathname();
+  const [user, setUser] = useState<any>(null);
+  const [isSignOutLoading, setIsSignOutLoading] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data?.user));
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    setIsSignOutLoading(true);
+    await createClient().auth.signOut();
+    window.location.href = '/';
+  };
 
   const isActive = (path: string) => pathname === path;
 
@@ -51,7 +72,6 @@ export default function Navigation() {
           {[
             { path: '/dashboard', label: 'Financial Cockpit', icon: '📊' },
             { path: '/upload', label: 'Upload', icon: '📁' },
-            { path: '/pricing', label: 'Pricing', icon: '💎' },
           ].map((link) => (
             <Link
               key={link.path}
@@ -78,9 +98,27 @@ export default function Navigation() {
 
           <div style={{ width: 1, height: 24, background: 'var(--border-subtle)', margin: '0 var(--space-sm)' }} />
 
-          <Link href="/auth" className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
-            Sign In
-          </Link>
+          {user ? (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Link href="/dashboard" className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+                Dashboard
+              </Link>
+              <button 
+                onClick={handleSignOut} 
+                disabled={isSignOutLoading}
+                style={{ 
+                  background: 'transparent', border: 'none', color: 'var(--text-secondary)', 
+                  cursor: 'pointer', fontSize: '13px', fontWeight: 500 
+                }}
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <Link href="/auth" className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+              Sign In
+            </Link>
+          )}
         </div>
       </div>
     </motion.nav>

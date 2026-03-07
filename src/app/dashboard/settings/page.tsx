@@ -14,9 +14,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User, color: 'text-emerald-500' },
     { id: 'notifications', label: 'Notifications', icon: Bell, color: 'text-amber-500' },
-    { id: 'billing', label: 'Billing', icon: CreditCard, color: 'text-emerald-500' },
     { id: 'security', label: 'Security', icon: Shield, color: 'text-rose-500' },
-    { id: 'appearance', label: 'Appearance', icon: Palette, color: 'text-teal-500' },
   ];
 
   const inputCls = 'w-full rounded-lg border border-emerald-200 bg-white px-3.5 py-2.5 text-sm text-emerald-950 outline-none placeholder:text-emerald-400/50 transition-all focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
@@ -93,35 +91,6 @@ export default function SettingsPage() {
               </motion.div>
             )}
 
-            {activeTab === 'billing' && (
-              <motion.div key="billing" {...fadeIn} className="space-y-4 sm:space-y-5">
-                <div className="flex items-center gap-2 text-sm font-bold text-emerald-950"><CreditCard className="h-4 w-4 text-emerald-500" /> Billing</div>
-                <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 sm:p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Banknote className="h-5 w-5 text-emerald-500" />
-                      <div><p className="text-[13px] font-bold text-emerald-900">Free Plan</p><p className="mt-0.5 text-[11px] text-emerald-600/40">Basic financial analysis</p></div>
-                    </div>
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">CURRENT</span>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 sm:p-5">
-                  <div className="flex items-center gap-3"><Crown className="h-5 w-5 text-amber-500" />
-                    <div><p className="text-[13px] font-bold text-amber-900">Pro Plan — $29/mo</p><p className="mt-0.5 text-[11px] text-amber-600/60">Full survival intelligence suite</p></div>
-                  </div>
-                  <ul className="mt-3 space-y-1.5">
-                    {['AI Founder Insights', 'Anomaly Detection', 'Survival Simulator', 'Reports & Export'].map(f => (
-                      <li key={f} className="flex items-center gap-2 text-[11px] text-amber-700/70 sm:text-[12px]"><Check className="h-3 w-3 text-amber-500" /> {f}</li>
-                    ))}
-                  </ul>
-                </div>
-                <motion.button whileHover={{ scale: 1.02, boxShadow: '0 8px 25px rgba(217,119,6,0.2)' }} whileTap={{ scale: 0.98 }}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 py-2.5 text-[12px] font-bold text-amber-900 shadow-md shadow-amber-500/25 sm:text-[13px]">
-                  <Crown className="h-4 w-4" /> Upgrade to Pro
-                </motion.button>
-              </motion.div>
-            )}
-
             {activeTab === 'security' && (
               <motion.div key="security" {...fadeIn} className="space-y-4 sm:space-y-5">
                 <div className="flex items-center gap-2 text-sm font-bold text-emerald-950"><Shield className="h-4 w-4 text-rose-500" /> Security</div>
@@ -130,25 +99,6 @@ export default function SettingsPage() {
                 <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Confirm Password</label><input type="password" placeholder="Repeat new password" className={inputCls} /></div>
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   className="rounded-lg bg-emerald-900 px-4 py-2.5 text-[12px] font-bold text-white shadow-sm hover:bg-emerald-800 sm:text-[13px]">Update Password</motion.button>
-              </motion.div>
-            )}
-
-            {activeTab === 'appearance' && (
-              <motion.div key="appear" {...fadeIn} className="space-y-4 sm:space-y-5">
-                <div className="flex items-center gap-2 text-sm font-bold text-emerald-950"><Palette className="h-4 w-4 text-teal-500" /> Appearance</div>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { l: 'Light', a: true, inner: 'bg-white', border: 'border-emerald-500 ring-2 ring-emerald-200' },
-                    { l: 'Dark', a: false, inner: 'bg-[#0a1a14]', border: 'border-emerald-700' },
-                    { l: 'System', a: false, inner: 'bg-gradient-to-r from-white to-[#0a1a14]', border: 'border-emerald-300' },
-                  ].map(t => (
-                    <motion.div key={t.l} whileHover={{ y: -3 }} whileTap={{ scale: 0.97 }}
-                      className={cn('cursor-pointer rounded-xl border-2 p-3 text-center shadow-sm sm:p-4', t.border)}>
-                      <div className={cn('mx-auto h-10 w-full rounded-lg sm:h-12', t.inner)} />
-                      <p className={cn('mt-2 text-[11px] font-semibold sm:text-[12px]', t.a ? 'text-emerald-700' : 'text-emerald-600/40')}>{t.l}</p>
-                    </motion.div>
-                  ))}
-                </div>
               </motion.div>
             )}
           </AnimatePresence>

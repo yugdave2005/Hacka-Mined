@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Banknote, Loader2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('signup');
@@ -11,17 +12,44 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const supabase = createClient();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setIsLoading(true); setError('');
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault(); 
+    setIsLoading(true); 
+    setError('');
+    
     try {
-      const endpoint = mode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
-      const body = mode === 'signup' ? { email, password, name } : { email, password };
-      const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const data = await res.json(); if (!res.ok) throw new Error(data.error || 'Auth failed');
-      localStorage.setItem('burnsight_token', data.token); window.location.href = '/dashboard';
-    } catch (err) { setError(err instanceof Error ? err.message : 'Error'); } finally { setIsLoading(false); }
+      if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            },
+          },
+        });
+        if (error) throw error;
+        // On success, redirect or show message to check email
+        window.location.href = '/dashboard';
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        window.location.href = '/dashboard';
+      }
+    } catch (err) { 
+        setError(err instanceof Error ? err.message : 'Authentication failed'); 
+    } finally { 
+        setIsLoading(false); 
+    }
   };
+
+
 
   const inputCls = 'w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-950 outline-none placeholder:text-emerald-400/50 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
 
@@ -36,6 +64,7 @@ export default function AuthPage() {
           <h1 className="text-lg font-bold text-emerald-950">{mode === 'signup' ? 'Create Account' : 'Welcome Back'}</h1>
           <p className="mt-0.5 text-[13px] text-emerald-700/50">{mode === 'signup' ? 'Save analysis & unlock Pro' : 'Sign in to BurnSight'}</p>
         </div>
+        
         <div className="mb-6 flex rounded-lg border border-emerald-200 bg-emerald-50/50 p-0.5">
           {(['signup', 'login'] as const).map(m => (
             <button key={m} onClick={() => { setMode(m); setError(''); }}
@@ -44,7 +73,14 @@ export default function AuthPage() {
             </button>
           ))}
         </div>
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        
+        <div className="space-y-4">
+            <div className="relative">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-200" /></div>
+            </div>
+        </div>
+
+        <form onSubmit={handleEmailAuth} className="mt-4 space-y-3.5">
           <AnimatePresence>
             {mode === 'signup' && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
