@@ -2,7 +2,8 @@
 
 import { motion, useScroll, useTransform } from 'framer-motion';
 import Link from 'next/link';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import {
   Banknote, ArrowRight, Target, Search, Brain,
   TrendingUp, SlidersHorizontal, Zap, DollarSign, Shield, BarChart3, CheckCircle2,
@@ -34,6 +35,26 @@ export default function LandingPage() {
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 60]);
   const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
 
+  const [user, setUser] = useState<any>(null);
+  const [isSignOutLoading, setIsSignOutLoading] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data?.user));
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    setIsSignOutLoading(true);
+    await createClient().auth.signOut();
+    window.location.href = '/';
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* ── Nav ── */}
@@ -49,12 +70,31 @@ export default function LandingPage() {
           </Link>
           <div className="flex items-center gap-1 sm:gap-2">
             <Link href="/dashboard" className="hidden px-3 py-1.5 text-[13px] font-medium text-emerald-700/60 transition-colors hover:text-emerald-900 sm:block">Demo</Link>
-            <Link href="/auth">
-              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                className="rounded-lg bg-emerald-900 px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-emerald-800">
-                Sign In
-              </motion.button>
-            </Link>
+            {user ? (
+               <div className="flex items-center gap-1 sm:gap-2">
+                 <Link href="/dashboard">
+                   <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                     className="rounded-lg bg-emerald-100 px-3.5 py-1.5 text-[13px] font-medium text-emerald-900 transition-colors hover:bg-emerald-200">
+                     Dashboard
+                   </motion.button>
+                 </Link>
+                 <motion.button 
+                   onClick={handleSignOut}
+                   disabled={isSignOutLoading}
+                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                   className="rounded-lg bg-emerald-900 px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                   {isSignOutLoading ? 'Signing out...' : 'Sign Out'}
+                 </motion.button>
+               </div>
+            ) : (
+                <Link href="/auth">
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                    className="rounded-lg bg-emerald-900 px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-emerald-800">
+                    Sign In
+                </motion.button>
+                </Link>
+            )}
+            
           </div>
         </div>
       </motion.nav>
