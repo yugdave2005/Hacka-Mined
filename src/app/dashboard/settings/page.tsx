@@ -1,15 +1,94 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, User, Bell, CreditCard, Shield, Palette, Crown, Check, Banknote } from 'lucide-react';
+import { Settings, User, Bell, Shield, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 
 const fadeIn = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 }, transition: { duration: 0.3 } };
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
   const [toggles, setToggles] = useState({ runway: true, anomaly: true, weekly: false, risk: true });
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [profileData, setProfileData] = useState({ fullName: '', email: '', role: 'CEO / Founder' });
+  const [message, setMessage] = useState('');
+  const [securityData, setSecurityData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [securityMessage, setSecurityMessage] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        setProfileData(prev => ({ 
+            ...prev, 
+            email: user.email || '',
+            fullName: user.user_metadata?.full_name || ''
+        }));
+      }
+      setIsLoading(false);
+    }
+    getUser();
+  }, [supabase.auth]);
+
+  const handleProfileUpdate = async () => {
+    setIsSaving(true);
+    setMessage('');
+    const { error } = await supabase.auth.updateUser({
+      data: { full_name: profileData.fullName }
+    });
+    setIsSaving(false);
+    if (error) {
+        setMessage(error.message);
+    } else {
+        setMessage('Profile updated successfully!');
+        setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (securityData.newPassword !== securityData.confirmPassword) {
+      setSecurityMessage('New passwords do not match');
+      return;
+    }
+    
+    setIsUpdatingPassword(true);
+    setSecurityMessage('');
+
+    // To verify current password before change, we must sign in 
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: profileData.email,
+        password: securityData.currentPassword
+    });
+
+    if (signInError) {
+        setSecurityMessage('Incorrect current password.');
+        setIsUpdatingPassword(false);
+        return;
+    }
+
+    // Now update password
+    const { error: updateError } = await supabase.auth.updateUser({
+        password: securityData.newPassword
+    });
+
+    setIsUpdatingPassword(false);
+
+    if (updateError) {
+        setSecurityMessage(updateError.message);
+    } else {
+        setSecurityMessage('Password updated successfully!');
+        setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setTimeout(() => setSecurityMessage(''), 3000);
+    }
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User, color: 'text-emerald-500' },
@@ -50,21 +129,41 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="glow-green flex-1 rounded-xl border border-emerald-200/60 bg-white p-5 shadow-sm sm:p-6">
+          {isLoading ? (
+             <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-500" /></div>
+          ) : (
           <AnimatePresence mode="wait">
             {activeTab === 'profile' && (
               <motion.div key="profile" {...fadeIn} className="space-y-4 sm:space-y-5">
                 <div className="flex items-center gap-2 text-sm font-bold text-emerald-950"><User className="h-4 w-4 text-emerald-500" /> Profile Settings</div>
                 <div className="flex items-center gap-4">
                   <motion.div whileHover={{ scale: 1.1 }}
-                    className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-xl font-bold text-white shadow-lg shadow-emerald-500/20">B</motion.div>
-                  <div><p className="text-[13px] font-semibold text-emerald-900">BurnSight Inc.</p><p className="text-[11px] text-emerald-600/40">CEO / Founder</p></div>
+                    className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-xl font-bold text-white shadow-lg shadow-emerald-500/20">
+                        {profileData.fullName ? profileData.fullName.charAt(0).toUpperCase() : 'B'}
+                    </motion.div>
+                  <div><p className="text-[13px] font-semibold text-emerald-900">{profileData.fullName || 'BurnSight Inc.'}</p><p className="text-[11px] text-emerald-600/40">{profileData.role}</p></div>
                 </div>
-                {[{ l: 'Company Name', p: 'BurnSight Inc.', t: 'text' }, { l: 'Email', p: 'founder@startup.com', t: 'email' }, { l: 'Role', p: 'CEO / Founder', t: 'text' }].map(f => (
-                  <div key={f.l}><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">{f.l}</label>
-                    <input type={f.t} placeholder={f.p} className={inputCls} /></div>
-                ))}
-                <motion.button whileHover={{ scale: 1.02, boxShadow: '0 8px 25px rgba(16,185,129,0.2)' }} whileTap={{ scale: 0.98 }}
-                  className="rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2.5 text-[12px] font-bold text-white shadow-md shadow-emerald-500/25 sm:text-[13px]">Save Changes</motion.button>
+                
+                <div>
+                    <label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Full Name</label>
+                    <input type="text" value={profileData.fullName} onChange={(e) => setProfileData(p => ({ ...p, fullName: e.target.value }))} placeholder="Your Name" className={inputCls} />
+                </div>
+                <div>
+                    <label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Email</label>
+                    <input type="email" value={profileData.email} disabled className={cn(inputCls, 'bg-emerald-50/50 text-emerald-600/60 cursor-not-allowed')} />
+                </div>
+                <div>
+                    <label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Role</label>
+                    <input type="text" value={profileData.role} onChange={(e) => setProfileData(p => ({ ...p, role: e.target.value }))} placeholder="CEO / Founder" className={inputCls} />
+                </div>
+
+                {message && <div className={cn("text-[13px] px-3 py-2 rounded-lg border", message.includes('success') ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-rose-50 border-rose-200 text-rose-600")}>{message}</div>}
+
+                <motion.button onClick={handleProfileUpdate} disabled={isSaving} whileHover={{ scale: 1.02, boxShadow: '0 8px 25px rgba(16,185,129,0.2)' }} whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2.5 text-[12px] font-bold text-white shadow-md shadow-emerald-500/25 sm:text-[13px] disabled:opacity-50">
+                    {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Save Changes
+                </motion.button>
               </motion.div>
             )}
 
@@ -94,14 +193,24 @@ export default function SettingsPage() {
             {activeTab === 'security' && (
               <motion.div key="security" {...fadeIn} className="space-y-4 sm:space-y-5">
                 <div className="flex items-center gap-2 text-sm font-bold text-emerald-950"><Shield className="h-4 w-4 text-rose-500" /> Security</div>
-                <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Current Password</label><input type="password" placeholder="••••••••" className={inputCls} /></div>
-                <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">New Password</label><input type="password" placeholder="Min. 8 characters" className={inputCls} /></div>
-                <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Confirm Password</label><input type="password" placeholder="Repeat new password" className={inputCls} /></div>
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  className="rounded-lg bg-emerald-900 px-4 py-2.5 text-[12px] font-bold text-white shadow-sm hover:bg-emerald-800 sm:text-[13px]">Update Password</motion.button>
+                <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Current Password</label>
+                  <input type="password" placeholder="••••••••" value={securityData.currentPassword} onChange={(e) => setSecurityData(s => ({ ...s, currentPassword: e.target.value }))} className={inputCls} /></div>
+                <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">New Password</label>
+                  <input type="password" placeholder="Min. 8 characters" value={securityData.newPassword} onChange={(e) => setSecurityData(s => ({ ...s, newPassword: e.target.value }))} className={inputCls} /></div>
+                <div><label className="mb-1.5 block text-[12px] font-semibold text-emerald-800 sm:text-[13px]">Confirm Password</label>
+                  <input type="password" placeholder="Repeat new password" value={securityData.confirmPassword} onChange={(e) => setSecurityData(s => ({ ...s, confirmPassword: e.target.value }))} className={inputCls} /></div>
+                
+                {securityMessage && <div className={cn("text-[13px] px-3 py-2 rounded-lg border", securityMessage.includes('success') ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-rose-50 border-rose-200 text-rose-600")}>{securityMessage}</div>}
+
+                <motion.button onClick={handlePasswordChange} disabled={isUpdatingPassword} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-900 px-4 py-2.5 text-[12px] font-bold text-white shadow-sm hover:bg-emerald-800 sm:text-[13px] disabled:opacity-50">
+                    {isUpdatingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Update Password
+                </motion.button>
               </motion.div>
             )}
           </AnimatePresence>
+          )}
         </div>
       </div>
     </motion.div>

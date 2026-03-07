@@ -12,13 +12,15 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  
+  const [success, setSuccess] = useState('');
+
   const supabase = createClient();
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setIsLoading(true); 
     setError('');
+    setSuccess('');
     
     try {
       if (mode === 'signup') {
@@ -26,23 +28,22 @@ export default function AuthPage() {
           email,
           password,
           options: {
-            data: {
-              full_name: name,
-            },
+            data: { full_name: name },
           },
         });
         if (error) throw error;
-        // On success, redirect or show message to check email
-        window.location.href = '/dashboard';
+        setSuccess('Signup successful! Redirecting...');
+        setTimeout(() => window.location.href = '/dashboard', 1000);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
-        window.location.href = '/dashboard';
+        setSuccess('Signin successful! Redirecting...');
+        setTimeout(() => window.location.href = '/dashboard', 1000);
       }
-    } catch (err) { 
+    } catch (err: any) { 
         setError(err instanceof Error ? err.message : 'Authentication failed'); 
     } finally { 
         setIsLoading(false); 
@@ -94,6 +95,7 @@ export default function AuthPage() {
           <div><label className="mb-1 block text-[13px] font-medium text-emerald-800">Password</label>
             <input type="password" placeholder="Min. 8 characters" value={password} onChange={e => setPassword(e.target.value)} minLength={8} required className={inputCls} /></div>
           {error && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-600">{error}</motion.div>}
+          {success && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-600">{success}</motion.div>}
           <motion.button type="submit" disabled={isLoading} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50">
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === 'signup' ? 'Create Account' : 'Sign In'}
